@@ -4,43 +4,69 @@
 
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.18;
-import {AggregatorV3Interface} from "@chainlink/contracts@1.3.0/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+import {PriceConverter} from "./PriceConverter.sol";
+
+error NotOwner();
 
 
 contract  FoundMe {
-    uint256 public  minmumUsd = 5*1e18;
+    using PriceConverter for uint256;
+    uint256 public  constant MINNUM_USD = 5*1e18;
+    address public immutable i_owner;
+
+    address[] public funders;
+    mapping (address funder =>uint256 amountFunded) public addressToAmountFunded;
 
 
     function found() public payable {
-        require(getConversionRate(msg.value)>minmumUsd,"didn't send enough eth");
-
+        // require(getConversionRate(msg.value)>minmumUsd,"didn't send enough eth");
+        require(msg.value.getConversionRate()>MINNUM_USD,"didn't send enough eth");
+        funders.push(msg.sender);
+        addressToAmountFunded[msg.sender] +=msg.value;
     }
 
-    function getPrice() public view returns(uint256){
-         (
-            /* uint80 roundID */,
-            int answer,
-            /*uint startedAt*/,
-            /*uint timeStamp*/,
-            /*uint80 answeredInRound*/
-        ) = AggregatorV3Interface(
-            0x694AA1769357215DE4FAC081bf1f309aDC325306
-        ).latestRoundData();
-        return uint256(answer*1e10);
+    function withdraw() public OnlyOwner {
 
+        for (uint256 funderIndex = 0;funderIndex<funders.length;funderIndex++){
+            address funder = funders[funderIndex];
+            addressToAmountFunded[funder] = 0;
+        }
+        funders = new address[](0);
+
+        // transfer
+        // send
+        // call
+
+        // msg.sender = address
+        // payable(msg.sender) = payable address
+        // payable(msg.sender).transfer(address(this).balance);
+        // bool sendSuccess = payable(msg.sender).send(address(this).balance);
+        // require(sendSuccess,"send failed");
+        (bool callSuccess,) = payable(msg.sender).call{value:address(this).balance}("");
+        require(callSuccess,"send failed");
+
+    } 
+
+    constructor(){
+        i_owner = msg.sender;
     }
 
-    function getConversionRate(uint256 ethAmount) public view returns(uint256){
-        return (getPrice()*ethAmount)/1e18;
+    modifier OnlyOwner() {
+        //require(msg.sender == i_owner,"Sender is not owner");
+        if(msg.sender != i_owner) {revert NotOwner();}
+        _;
     }
 
-    function getVersion() public view returns (uint256){
-        return AggregatorV3Interface(
-            0x694AA1769357215DE4FAC081bf1f309aDC325306
-        ).version();
+    // receive()
+    // fallback()
+
+    receive() external payable { 
+        found();
     }
 
-
+    fallback() external payable { 
+        found();
+    }
 
 
 }
